@@ -8,8 +8,14 @@ public class WaterSurface : MonoBehaviour
     #region Inspector Modifiable Fields
     [SerializeField]
     private Material material;
+
+    [SerializeField]
+    private float meshScale = 10;
+
+    [SerializeField]
+    private int meshSize = 200;
     #endregion
-    
+
     private MeshFilter waterMesh;
     private MeshRenderer meshRenderer;
 
@@ -26,15 +32,14 @@ public class WaterSurface : MonoBehaviour
 
         var triangles = new List<int>();
 
-        float scale = 0.0625f;
-        for (int x = -100; x <= 100; x++)
+        for (int x = 0; x < meshSize; x++)
         {
-            for (int z = -100; z <= 100; z++)
+            for (int z = 0; z < meshSize; z++)
             {
-                var a = new Vector3(x, 0, z) * scale;
-                var b = a + new Vector3(1, 0, 0) * scale;
-                var c = a + new Vector3(1, 0, 1) * scale;
-                var d = a + new Vector3(0, 0, 1) * scale;
+                var a = new Vector3(x, 0, z);
+                var b = a + new Vector3(1, 0, 0);
+                var c = a + new Vector3(1, 0, 1);
+                var d = a + new Vector3(0, 0, 1);
 
                 foreach (var v in new Vector3[] { a, b, c, d })
                 {
@@ -53,12 +58,20 @@ public class WaterSurface : MonoBehaviour
             }
         }
 
-        mesh.vertices = vertexIndexMap.ToList().OrderBy(x => x.Value).Select(x => x.Key).ToArray();
+        var vertices = vertexIndexMap.OrderBy(x => x.Value).Select(x => x.Key);
+        mesh.vertices = vertices.Select(x => x * meshScale / meshSize).ToArray();
+        mesh.uv = vertices.Select(UvMapping).ToArray();
         mesh.triangles = triangles.ToArray();
         mesh.RecalculateNormals();
         mesh.RecalculateTangents();
         waterMesh.mesh = mesh;
         meshRenderer.material = material;
+    }
+
+    private Vector2 UvMapping(Vector3 v)
+    {
+        Vector2 uv = new Vector2(Mathf.InverseLerp(0, meshSize - 1, v.x), Mathf.InverseLerp(0, meshSize - 1, v.z));
+        return uv;
     }
 
     // Update is called once per frame
