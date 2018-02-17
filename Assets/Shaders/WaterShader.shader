@@ -1,7 +1,8 @@
 ﻿Shader "Custom/WaterShader" {
-    Properties{
-        _Color("Color", Color) = (1,1,1,1)
-        _MainTex("Albedo (RGB)", 2D) = "white" {}
+    Properties {
+        _Tess ("Tessellation", Range(1,32)) = 4
+        _Color("Color", color) = (1,1,1,0)
+        _MainTex ("Base (RGB)", 2D) = "white" {}
         _Glossiness("Smoothness", Range(0,1)) = 0.5
         _Metallic("Metallic", Range(0,1)) = 0.0
         _Amp1("Amplitudes", Vector) = (1,1,1,1)
@@ -13,29 +14,35 @@
         _TranslucentParams("Translucency Parameters", Vector) = (0,0,0,0)
         _SpecularParams("Specular Parameters", Vector) = (0,0,0,0)
     }
-    SubShader{
-        Tags { "RenderType" = "Opaque" }
-        LOD 200
-
+    SubShader {
+        Tags { "RenderType"="Opaque" }
+        LOD 300
+            
         CGPROGRAM
-        // Physically based Standard lighting model, and enable shadows on all light types
-        #pragma surface surf StandardTranslucent fullforwardshadows vertex:vert
-
-        // Use shader model 3.0 target, to get nicer looking lighting
-        #pragma target 3.0
+        #pragma surface surf StandardTranslucent vertex:vert tessellate:tessDistance
+        #pragma target 4.6
 
         #include "NoiseSimplex.cginc"
+        #include "Tessellation.cginc"
         #include "UnityPBSLighting.cginc"
-
+        
         sampler2D _MainTex;
 
         struct Input {
             float2 uv_MainTex;
         };
 
+        struct appdata {
+            float4 vertex : POSITION;
+            float4 tangent : TANGENT;
+            float3 normal : NORMAL;
+            float2 texcoord : TEXCOORD0;
+        };
+
         half _Glossiness;
         half _Metallic;
         fixed4 _Color;
+
         float4 _Amp1;
         float4 _Amp2;
         float4 _Freq1;
@@ -44,6 +51,7 @@
         float4 _Speed2;
         float4 _TranslucentParams;
         float4 _SpecularParams;
+        float _Tess;
 
         // Reference: https://www.alanzucconi.com/2017/08/30/fast-subsurface-scattering-2/
         inline fixed4 LightingStandardTranslucent(SurfaceOutputStandard s, fixed3 viewDir, UnityGI gi)
@@ -72,32 +80,35 @@
             LightingStandard_GI(s, data, gi);
         }
 
-        void surf(Input IN, inout SurfaceOutputStandard o) {
-            // Albedo comes from a texture tinted by color
+        void surf (Input IN, inout SurfaceOutputStandard o) {
             fixed4 c = tex2D(_MainTex, IN.uv_MainTex) * _Color;
             o.Albedo = c.rgb;
-            // Metallic and smoothness come from slider variables
             o.Metallic = _Metallic;
             o.Smoothness = _Glossiness;
             o.Alpha = c.a;
         }
 
+        float4 tessDistance(appdata v0, appdata v1, appdata v2) {
+            return UnityDistanceBasedTess(v0.vertex, v1.vertex, v2.vertex, 10, 70, _Tess);
+        }
+
         inline float wave(float2 v) {
             float2 t = float2(_Time.x, _Time.x);
 
-            float y1 = snoise(_Freq1.x * v + _Speed1.x * t) * _Amp1.x;
+            float y1 =      snoise(_Freq1.x * v + _Speed1.x * t)  * _Amp1.x;
             float y2 = -abs(snoise(_Freq1.y * v + _Speed1.y * t)) * _Amp1.y;
-            float y3 = snoise(_Freq1.z * v + _Speed1.z * t) * _Amp1.z;
-            float y4 = snoise(_Freq1.w * v + _Speed1.w * t) * _Amp1.w;
-            float y5 = snoise(_Freq2.x * v + _Speed2.x * t) * _Amp2.x;
-            float y6 = snoise(_Freq2.y * v + _Speed2.y * t) * _Amp2.y;
-            float y7 = snoise(_Freq2.z * v + _Speed2.z * t) * _Amp2.z;
-            float y8 = snoise(_Freq2.w * v + _Speed2.w * t) * _Amp2.w;
+            float y3 =      snoise(_Freq1.z * v + _Speed1.z * t)  * _Amp1.z;
+            float y4 =      snoise(_Freq1.w * v + _Speed1.w * t)  * _Amp1.w;
+            float y5 =      snoise(_Freq2.x * v + _Speed2.x * t)  * _Amp2.x;
+            float y6 =      snoise(_Freq2.y * v + _Speed2.y * t)  * _Amp2.y;
+            float y7 =      snoise(_Freq2.z * v + _Speed2.z * t)  * _Amp2.z;
+            float y8 =      snoise(_Freq2.w * v + _Speed2.w * t)  * _Amp2.w;
 
             return y1 + y2 + y3 + y4 + y5 + y6 + y7 + y8;
         }
 
-        void vert(inout appdata_full v) {
+        void vert(inout appdata v)
+        {
             float3 vertex = mul(unity_ObjectToWorld, v.vertex).xyz;
 
             float y = wave(vertex.xz);
