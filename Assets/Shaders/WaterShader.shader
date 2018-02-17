@@ -86,7 +86,7 @@
             float2 t = float2(_Time.x, _Time.x);
 
             float y1 = snoise(_Freq1.x * v + _Speed1.x * t) * _Amp1.x;
-            float y2 = snoise(_Freq1.y * v + _Speed1.y * t) * _Amp1.y;
+            float y2 = -abs(snoise(_Freq1.y * v + _Speed1.y * t)) * _Amp1.y;
             float y3 = snoise(_Freq1.z * v + _Speed1.z * t) * _Amp1.z;
             float y4 = snoise(_Freq1.w * v + _Speed1.w * t) * _Amp1.w;
             float y5 = snoise(_Freq2.x * v + _Speed2.x * t) * _Amp2.x;
