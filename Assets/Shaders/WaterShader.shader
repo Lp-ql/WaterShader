@@ -1,4 +1,8 @@
-﻿Shader "Custom/WaterShader" {
+﻿// Upgrade NOTE: replaced 'mul(UNITY_MATRIX_MVP,*)' with 'UnityObjectToClipPos(*)'
+
+// Upgrade NOTE: replaced 'mul(UNITY_MATRIX_MVP,*)' with 'UnityObjectToClipPos(*)'
+
+Shader "Custom/WaterShader" {
     Properties {
         _Tess ("Tessellation", Range(1,32)) = 4
         _Color("Color", color) = (1,1,1,0)
@@ -13,20 +17,23 @@
         _Speed2("Wave Speed", Vector) = (1,1,1,1)
         _TranslucentParams("Translucency Parameters", Vector) = (0,0,0,0)
         _SpecularParams("Specular Parameters", Vector) = (0,0,0,0)
+        _HeightMap ("Height Map", 2D) = "white" {}
+        _NormalMap ("Normal Map", 2D) = "white" {}
     }
     SubShader {
-        Tags { "RenderType"="Opaque" }
+        Tags { "Queue" = "Transparent" "RenderType" = "Transparent" }
         LOD 300
-            
+
         CGPROGRAM
         #pragma surface surf StandardTranslucent vertex:vert tessellate:tessDistance
         #pragma target 4.6
 
-        #include "NoiseSimplex.cginc"
         #include "Tessellation.cginc"
         #include "UnityPBSLighting.cginc"
         
         sampler2D _MainTex;
+        sampler2D _HeightMap;
+        sampler2D _NormalMap;
 
         struct Input {
             float2 uv_MainTex;
@@ -57,18 +64,17 @@
         inline fixed4 LightingStandardTranslucent(SurfaceOutputStandard s, fixed3 viewDir, UnityGI gi)
         {
             fixed4 pbr = LightingStandard(s, viewDir, gi);
-
-            // Translucency
             float3 L = gi.light.dir;
             float3 V = viewDir;
             float3 N = s.Normal;
 
+            // Translucency
             float3 H = normalize(L + N * _TranslucentParams.x);
             float I = pow(saturate(dot(V, -H)), _TranslucentParams.y) * _TranslucentParams.z;
 
             // Specular
             H = normalize(L + V);
-            float spec = pow(max(0, dot(s.Normal, H)), _SpecularParams.x) * _SpecularParams.y;
+            float spec = pow(max(0, dot(N, H)), _SpecularParams.x) * _SpecularParams.y;
 
             // Final add
             pbr.rgb = pbr.rgb + gi.light.color * I + _LightColor0.rgb * spec;
@@ -92,37 +98,12 @@
             return UnityDistanceBasedTess(v0.vertex, v1.vertex, v2.vertex, 10, 70, _Tess);
         }
 
-        inline float wave(float2 v) {
-            float2 t = float2(_Time.x, _Time.x);
-
-            float y1 =      snoise(_Freq1.x * v + _Speed1.x * t)  * _Amp1.x;
-            float y2 = -abs(snoise(_Freq1.y * v + _Speed1.y * t)) * _Amp1.y;
-            float y3 =      snoise(_Freq1.z * v + _Speed1.z * t)  * _Amp1.z;
-            float y4 =      snoise(_Freq1.w * v + _Speed1.w * t)  * _Amp1.w;
-            float y5 =      snoise(_Freq2.x * v + _Speed2.x * t)  * _Amp2.x;
-            float y6 =      snoise(_Freq2.y * v + _Speed2.y * t)  * _Amp2.y;
-            float y7 =      snoise(_Freq2.z * v + _Speed2.z * t)  * _Amp2.z;
-            float y8 =      snoise(_Freq2.w * v + _Speed2.w * t)  * _Amp2.w;
-
-            return y1 + y2 + y3 + y4 + y5 + y6 + y7 + y8;
-        }
-
         void vert(inout appdata v)
         {
-            float3 vertex = mul(unity_ObjectToWorld, v.vertex).xyz;
+            float2 uv = v.texcoord;
 
-            float y = wave(vertex.xz);
-            const float eps = 0.0001;
-
-            float ydx = wave(vertex.xz + float2(eps, 0)) - y;
-            float ydz = wave(vertex.xz + float2(0, eps)) - y;
-
-            float3 vx = float3(eps, ydx, 0);
-            float3 vy = float3(0, ydx, eps);
-            float3 normal = normalize(cross(vx, vy));
-
-            v.vertex.y = y;
-            v.normal = normal;
+            v.vertex.y = tex2Dlod(_HeightMap, float4(uv.xy, 0, 0)).r;
+            v.normal = tex2Dlod(_NormalMap, float4(uv.xy, 0, 0)).rgb;
         }
         ENDCG
     }
